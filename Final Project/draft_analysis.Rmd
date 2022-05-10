@@ -1,0 +1,172 @@
+---
+title: "621:churn modeling"
+author: "Jie Zou:EDA"
+output:
+  prettydoc::html_pretty:
+    theme: architect
+    highlight: github
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+### read dataset
+
+```{r include=FALSE}
+d <- read.csv("sparkify-medium.csv")
+```
+
+**summary**
+
+```{r include=FALSE}
+str(d)
+
+```
+
+```{r}
+summary(d)
+```
+
+```{r library, include=FALSE}
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(tidyverse)
+```
+
+```{r}
+head(d)
+```
+
+## actions performed in app
+```{r include=FALSE}
+n_user_act <- d %>% select(page) %>% distinct() %>% count()
+print(paste("we have total", n_user_act,"kinds of user actions"))
+```
+
+
+## users approximation
+```{r include=FALSE}
+n_user_est <- d %>% select(userId) %>% distinct() %>% count()
+print(paste("we only have", n_user_est,"users in the data"))
+```
+
+## determine target variable
+  the target variable can be determined by an individual take an action of checking cancellation confirmation page.
+```{r include=FALSE}
+d.copy <- d
+d.copy <- d.copy %>% mutate(target = ifelse(page == 'Cancellation Confirmation', 1, 0))
+n_user_churn <- d.copy %>% filter(target == 1) %>% count()
+print(paste("In our dataset, there are", n_user_churn, "number of user churned"))
+```
+
+## level perspective
+```{r}
+show_level <- function(df){
+  ggplot(df %>% filter(target == 1), aes(x = level)) + 
+    geom_bar(position = position_dodge()) + 
+    theme_classic() + 
+    labs(title = "distribution of level")
+}
+
+#show_level(d.copy)
+
+```
+
+## distribution of actions in app
+
+```{r}
+show_act_dist <- function(df){
+  ggplot(df, aes(x = page)) + 
+    geom_bar() + 
+    theme_classic() + 
+    theme(axis.text.x = element_text(angle = 90))+
+    labs(x = "user activities",
+         title = "distribution of user activities")
+}
+show_act_dist(d.copy)
+```
+
+### Adding features
+
+```{r feature_engineering}
+# create labels from page
+
+d.copy <- d.copy %>% mutate(n_next_song = ifelse(d.copy$page == 'NextSong', 1, NA),
+                        n_logout = ifelse(d.copy$page == 'Logout', 1, NA),
+                        n_home = ifelse(d.copy$page == 'Home', 1, NA),
+                        n_login = ifelse(d.copy$page == 'Login', 1, NA),
+                        n_downgrade = ifelse(d.copy$page == 'Downgrade', 1, NA),
+                        n_addtoplaylist = ifelse(d.copy$page  == "Add to Playlist", 1, NA),
+                        n_advert = ifelse(d.copy$page == 'Roll Advert', 1, NA),
+                        n_thumbup = ifelse(d.copy$page  == 'Thumbs Up', 1, NA),
+                        n_help = ifelse(d.copy$page  == 'Help', 1, NA),
+                        n_thumbdown = ifelse(d.copy$page  == 'Thumbs Down', 1, NA),
+                        n_addfriend = ifelse(d.copy$page  == 'Add Friend', 1, NA),
+                        n_about = ifelse(d.copy$page  == 'About', 1, NA),
+                        n_setting = ifelse(d.copy$page  == 'Settings', 1, NA),
+                        n_savesetting = ifelse(d.copy$page  == 'Save Settings', 1, NA),
+                        n_upgrade = ifelse(d.copy$page  == 'Upgrade', 1, NA),
+                        n_submitdgrade = ifelse(d.copy$page  == 'Submit Downgrade', 1, NA),
+                        n_cancel = ifelse(d.copy$page == 'Cancel', 1, NA),
+                        n_submitupgrade = ifelse(d.copy$page  == 'Submit Upgrade', 1, NA),
+                        n_error = ifelse(d.copy$page  == 'Error', 1, NA),
+                        n_register = ifelse(d.copy$page  == 'Register', 1, NA),
+                        n_submitregister = ifelse(d.copy$page  == "Submit Registration",1, NA)
+                        )
+
+# shorten value in userAgent
+d.copy$userAgent[str_detect(d.copy$userAgent, "Macintosh")] <- "Macintosh"
+d.copy$userAgent[str_detect(d.copy$userAgent, "Windows")] <- "Windows"
+d.copy$userAgent[str_detect(d.copy$userAgent, "iPad")] <- "iPad"
+d.copy$userAgent[str_detect(d.copy$userAgent, "iPhone")] <- "iPhone"
+d.copy$userAgent[str_detect(d.copy$userAgent, "Linux")] <- "Linux"
+d.copy$userAgent[str_detect(d.copy$userAgent, "Ubuntu")] <- "Ubuntu"
+
+# extract state
+d.copy$location <- str_replace(str_extract(d.copy$location, ", .+"), ", ", "")
+d.copy$location <- as.factor(d.copy$location)
+```
+
+
+```{r}
+# makes sure to use all numerical data
+show_numeric_corplot <- function(df){
+  correlation = cor(df, use = 'pairwise.complete.obs')
+  corrplot(correlation, 'ellipse', type = 'lower',  order = 'hclust', col=brewer.pal(n=6, name="RdYlBu"))
+}
+```
+
+```{r}
+
+# plot churn by state
+show_state_churn <- function(df){
+  ggplot(df %>% filter(target == 1), aes(x=fct_infreq(location))) + 
+    geom_bar()+
+    theme_classic() + 
+    theme(axis.text.x = element_text(angle = 90)) + 
+    labs(x = "state", 
+         y = "number of people churned", 
+         title = 'churn by states'
+         )
+}
+
+show_state_churn(d.copy)
+```
+
+
+
+
+
+```{r}
+show_gender_churn <- function(df){
+  ggplot(df %>% filter(target == 1), aes(x = gender))+
+  geom_bar(na.rm = T) +
+  theme_classic() + 
+  labs(title = "churn ratio by gender")
+}
+
+show_gender_churn(d.copy)
+```
+
